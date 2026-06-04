@@ -137,6 +137,40 @@ export const appRouter = router({
         );
         return clip;
       }),
+
+    // Upload clip with Uint8Array (direct blob data)
+    uploadBlob: protectedProcedure
+      .input(z.object({
+        roomId: z.number(),
+        date: z.string(), // YYYY-MM-DD
+        timeSlot: z.number().min(0).max(23),
+        videoBlob: z.instanceof(Uint8Array), // Direct binary data
+        mimeType: z.string().default("video/webm"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const isMember = await isRoomMember(input.roomId, ctx.user.id);
+        if (!isMember) throw new TRPCError({ code: "FORBIDDEN", message: "이 로그방의 멤버가 아니에요." });
+
+        // Use blob data directly
+        const buffer = Buffer.from(input.videoBlob);
+        console.log(`[Upload] Room ${input.roomId}, User ${ctx.user.id}, Size: ${buffer.length} bytes`);
+
+        // Store in S3
+        const ext = input.mimeType.includes("mp4") ? "mp4" : "webm";
+        const key = `clips/${input.roomId}/${ctx.user.id}/${input.date}/${input.timeSlot}.${ext}`;
+        const { url } = await storagePut(key, buffer, input.mimeType);
+
+        // Upsert clip record
+        const clip = await upsertClip(
+          input.roomId,
+          ctx.user.id,
+          input.date,
+          input.timeSlot,
+          key,
+          url
+        );
+        return clip;
+      }),
   }),
 });
 

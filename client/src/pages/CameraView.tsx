@@ -38,7 +38,7 @@ export default function CameraView() {
     }
   }, [rooms, roomsLoading, roomId, selectedRoomId]);
 
-  const uploadMutation = trpc.clip.upload.useMutation({
+  const uploadMutation = trpc.clip.uploadBlob.useMutation({
     onSuccess: () => {
       utils.clip.getSlot.invalidate();
       setState("done");
@@ -48,55 +48,56 @@ export default function CameraView() {
         else navigate("/");
       }, 1200);
     },
-    onError: (err) => {
-      toast.error(err.message || "업로드에 실패했어요.");
+    onError: (err: any) => {
       setState("ready");
+      toast.error(err.message || "업로드 실패");
     },
   });
 
-  // Start camera
-  const startCamera = useCallback(async (facing: "user" | "environment") => {
-    // Stop existing stream
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop());
-      streamRef.current = null;
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: facing, width: { ideal: 720 }, height: { ideal: 1280 } },
-        audio: false,
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-      }
-      setState("ready");
-    } catch (err: any) {
-      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
-        setState("permission_denied");
-      } else {
-        toast.error("카메라를 시작할 수 없어요.");
-        setState("permission_denied");
-      }
-    }
-  }, []);
+  // ── Request Camera Permission ─────────────────────────────────────────────
 
   useEffect(() => {
-    startCamera(facingMode);
-    return () => {
-      if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
-      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+    if (state !== "idle") return;
+
+    const requestCamera = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode },
+          audio: false,
+        });
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+        setState("ready");
+      } catch (err) {
+        console.error("Camera permission denied:", err);
+        setState("permission_denied");
+      }
     };
+
+    requestCamera();
+
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [state, facingMode]);
+
+  // ── Toggle Facing Mode ────────────────────────────────────────────────────
+
+  const toggleFacingMode = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setState("idle");
+    setFacingMode(prev => prev === "user" ? "environment" : "user");
   }, []);
 
-  const switchCamera = useCallback(() => {
-    const newFacing = facingMode === "user" ? "environment" : "user";
-    setFacingMode(newFacing);
-    startCamera(newFacing);
-  }, [facingMode, startCamera]);
+  // ── Start Recording ───────────────────────────────────────────────────────
 
-  // Start recording
   const startRecording = useCallback(() => {
     if (!streamRef.current || state !== "ready" || !selectedRoomId) return;
     chunksRef.current = [];
@@ -150,19 +151,17 @@ export default function CameraView() {
     setState("uploading");
     const slot = getCurrentSlot();
 
-    // Convert blob to base64
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64 = reader.result as string;
-      uploadMutation.mutate({
-        roomId: selectedRoomId,
-        date: slot.date,
-        timeSlot: slot.hour,
-        videoBase64: base64,
-        mimeType,
-      });
-    };
-    reader.readAsDataURL(blob);
+    // Convert blob to Uint8Array for transmission
+    const arrayBuffer = await blob.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+
+    uploadMutation.mutate({
+      roomId: selectedRoomId,
+      date: slot.date,
+      timeSlot: slot.hour,
+      videoBlob: uint8Array,
+      mimeType,
+    });
   }, [selectedRoomId, uploadMutation]);
 
   const handleClose = useCallback(() => {
@@ -179,184 +178,117 @@ export default function CameraView() {
           <Camera size={28} className="text-[#555]" />
         </div>
         <div className="text-center">
-          <p className="text-white font-semibold text-base mb-2">카메라 권한이 필요해요</p>
-          <p className="text-[#555] text-sm leading-relaxed">
-            브라우저 설정에서 카메라 권한을 허용한 후<br />다시 시도해 주세요.
-          </p>
+          <h2 className="text-white font-bold text-lg mb-2">카메라 권한이 필요해요</h2>
+          <p className="text-[#555] text-sm">브라우저 설정에서 카메라 권한을 허용해 주세요.</p>
         </div>
         <button
-          onClick={() => startCamera(facingMode)}
-          className="px-6 py-3 rounded-[16px] font-semibold text-sm text-black transition-all active:scale-95"
+          onClick={() => navigate("/")}
+          className="px-6 py-2 rounded-full font-semibold text-black transition-all active:scale-95"
           style={{ background: "#11E6D4" }}
         >
-          다시 시도
+          돌아가기
         </button>
-        <button onClick={handleClose} className="text-[#555] text-sm">돌아가기</button>
       </div>
     );
   }
 
-  // ── Render: No Rooms ──────────────────────────────────────────────────────
+  // ── Render: Ready / Recording / Uploading ─────────────────────────────────
 
-  if (!roomsLoading && (!rooms || rooms.length === 0)) {
-    return (
-      <div className="flex flex-col h-full bg-black items-center justify-center px-6 gap-6">
-        <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: "#151515" }}>
-          <Camera size={28} className="text-[#555]" />
-        </div>
-        <div className="text-center">
-          <p className="text-white font-semibold text-base mb-2">참여한 로그방이 없어요</p>
-          <p className="text-[#555] text-sm leading-relaxed">
-            먼저 로그방을 만들거나<br />초대 코드로 참여해 주세요.
-          </p>
-        </div>
-        <div className="flex gap-3 w-full">
-          <button
-            onClick={() => navigate("/create-room")}
-            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-[16px] font-semibold text-sm text-black transition-all active:scale-95"
-            style={{ background: "#11E6D4" }}
-          >
-            <Plus size={16} />
-            만들기
-          </button>
-          <button
-            onClick={() => navigate("/join-room")}
-            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-[16px] font-semibold text-sm text-white border border-[#2a2a2a] transition-all active:scale-95"
-            style={{ background: "#151515" }}
-          >
-            <Hash size={16} />
-            참여
-          </button>
-        </div>
-        <button onClick={handleClose} className="text-[#555] text-sm">돌아가기</button>
-      </div>
-    );
-  }
-
-  // ── Render: Ready to shoot ────────────────────────────────────────────────
+  const isRecording = state === "recording";
+  const isUploading = state === "uploading";
+  const isDone = state === "done";
 
   return (
-    <div className="flex flex-col h-full bg-black relative">
-      {/* Camera preview - full screen */}
-      <div className="absolute inset-0">
+    <div className="flex flex-col h-screen w-full bg-black overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 pt-14 pb-3 flex-shrink-0 h-[60px]">
+        <h1 className="text-base font-bold text-white">2초 촬영</h1>
+        <button
+          onClick={handleClose}
+          className="w-9 h-9 flex items-center justify-center rounded-full transition-all active:scale-95"
+          style={{ background: "#151515" }}
+        >
+          <X size={18} className="text-white" />
+        </button>
+      </div>
+
+      {/* Camera Preview */}
+      <div className="flex-1 flex flex-col items-center justify-center min-h-0 overflow-hidden relative px-6">
         <video
           ref={videoRef}
           autoPlay
-          muted
           playsInline
           className="w-full h-full object-cover"
-          style={{ transform: facingMode === "user" ? "scaleX(-1)" : "none" }}
+          style={{ borderRadius: 22 }}
         />
-        {/* Dark overlay when uploading/done */}
-        {(state === "uploading" || state === "done") && (
-          <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-            {state === "uploading" ? (
-              <div className="flex flex-col items-center gap-3">
-                <div className="w-10 h-10 rounded-full border-2 border-[#11E6D4] border-t-transparent animate-spin" />
-                <p className="text-white text-sm font-medium">업로드 중...</p>
+
+        {/* Recording Progress Overlay */}
+        {isRecording && (
+          <div className="absolute inset-0 flex items-center justify-center" style={{ borderRadius: 22 }}>
+            <div
+              className="w-20 h-20 rounded-full flex items-center justify-center"
+              style={{ background: "rgba(17,230,212,0.2)", border: "3px solid #11E6D4" }}
+            >
+              <span className="text-white font-bold">{Math.round(progress)}%</span>
+            </div>
+          </div>
+        )}
+
+        {/* Done Overlay */}
+        {isDone && (
+          <div className="absolute inset-0 flex items-center justify-center" style={{ borderRadius: 22, background: "rgba(0,0,0,0.7)" }}>
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: "#11E6D4" }}>
+                <span className="text-2xl">✓</span>
               </div>
-            ) : (
-              <div className="flex flex-col items-center gap-3 animate-fade-in">
-                <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: "rgba(17,230,212,0.15)" }}>
-                  <Camera size={24} className="text-[#11E6D4]" />
-                </div>
-                <p className="text-white text-sm font-medium">업로드 완료!</p>
-              </div>
-            )}
+              <p className="text-white font-bold">업로드 완료!</p>
+            </div>
           </div>
         )}
       </div>
 
-      {/* Top controls */}
-      <div className="relative z-10 flex items-center justify-between px-6 pt-14 pb-4">
-        <button
-          onClick={handleClose}
-          className="w-10 h-10 flex items-center justify-center rounded-full"
-          style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)" }}
-        >
-          <X size={18} className="text-white" />
-        </button>
-
-        {/* Room selector */}
-        {roomsLoading ? (
-          <div className="px-3 py-2 rounded-full text-xs font-medium text-[#555]" style={{ background: "rgba(0,0,0,0.5)" }}>
-            로드 중...
-          </div>
-        ) : rooms && rooms.length > 0 ? (
-          <select
-            value={selectedRoomId ?? ""}
-            onChange={e => setSelectedRoomId(Number(e.target.value))}
-            className="px-3 py-2 rounded-full text-sm font-medium text-white outline-none"
-            style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.15)" }}
-          >
-            <option value="" disabled>로그방 선택</option>
-            {rooms.map(r => (
-              <option key={r.id} value={r.id}>{r.name}</option>
-            ))}
-          </select>
-        ) : null}
-
-        {/* Switch camera */}
-        <button
-          onClick={switchCamera}
-          disabled={state === "recording" || state === "uploading"}
-          className="w-10 h-10 flex items-center justify-center rounded-full disabled:opacity-40"
-          style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)" }}
-        >
-          <RotateCcw size={18} className="text-white" />
-        </button>
-      </div>
-
-      {/* Progress bar */}
-      {state === "recording" && (
-        <div className="relative z-10 px-6">
-          <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.2)" }}>
-            <div
-              className="h-full rounded-full transition-none"
-              style={{ width: `${progress}%`, background: "#11E6D4" }}
-            />
-          </div>
-          <p className="text-center text-white text-xs mt-2 font-medium">
-            {((RECORD_DURATION_MS - (progress / 100) * RECORD_DURATION_MS) / 1000).toFixed(1)}초
-          </p>
+      {/* Controls */}
+      <div className="flex items-center justify-between px-6 pb-8 pt-4 flex-shrink-0 h-[100px]">
+        {/* Room Selector */}
+        <div className="flex items-center gap-2">
+          {roomsLoading ? (
+            <div className="w-8 h-8 rounded-full border-2 border-[#11E6D4] border-t-transparent animate-spin" />
+          ) : rooms && rooms.length > 0 ? (
+            <select
+              value={selectedRoomId || ""}
+              onChange={(e) => setSelectedRoomId(Number(e.target.value))}
+              className="px-3 py-2 rounded-full text-xs font-medium text-white transition-all"
+              style={{ background: "#151515", color: "#11E6D4" }}
+              disabled={isRecording || isUploading}
+            >
+              {rooms.map(room => (
+                <option key={room.id} value={room.id}>{room.name}</option>
+              ))}
+            </select>
+          ) : (
+            <p className="text-[#555] text-xs">로그방 없음</p>
+          )}
         </div>
-      )}
 
-      {/* Bottom controls */}
-      <div className="absolute bottom-0 left-0 right-0 z-10 flex flex-col items-center pb-12 gap-4">
-        {/* Shutter button - disabled if no room selected or still loading */}
+        {/* Shutter Button */}
         <button
           onClick={startRecording}
-          disabled={state !== "ready" || !selectedRoomId || roomsLoading}
-          className="relative flex items-center justify-center transition-all disabled:opacity-40"
-          style={{ width: 80, height: 80 }}
+          disabled={isRecording || isUploading || !selectedRoomId}
+          className="w-14 h-14 rounded-full flex items-center justify-center transition-all active:scale-95 disabled:opacity-30"
+          style={{ background: "#11E6D4" }}
         >
-          {/* Outer ring */}
-          <div
-            className="absolute inset-0 rounded-full"
-            style={{ border: "3px solid rgba(255,255,255,0.8)" }}
-          />
-          {/* Inner circle */}
-          <div
-            className={`rounded-full transition-all duration-150 ${state === "recording" ? "animate-record" : ""}`}
-            style={{
-              width: 60,
-              height: 60,
-              background: state === "recording" ? "#11E6D4" : "white",
-              borderRadius: state === "recording" ? "12px" : "50%",
-            }}
-          />
+          <Camera size={24} className="text-black" />
         </button>
 
-        <p className="text-white/60 text-xs">
-          {roomsLoading ? "로그방 로드 중..." :
-           !selectedRoomId ? "로그방을 선택해 주세요" :
-           state === "idle" ? "카메라 시작 중..." :
-           state === "ready" ? "버튼을 눌러 2초 촬영" :
-           state === "recording" ? "촬영 중..." :
-           state === "uploading" ? "업로드 중..." :
-           "완료!"}
-        </p>
+        {/* Toggle Facing Mode */}
+        <button
+          onClick={toggleFacingMode}
+          disabled={isRecording || isUploading}
+          className="w-9 h-9 flex items-center justify-center rounded-full transition-all active:scale-95 disabled:opacity-30"
+          style={{ background: "#151515" }}
+        >
+          <RotateCcw size={16} className="text-white" />
+        </button>
       </div>
     </div>
   );

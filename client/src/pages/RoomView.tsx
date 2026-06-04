@@ -356,14 +356,14 @@ export default function RoomView() {
 
       {/* Cards container - 정확한 높이 계산 */}
       {/* 390×844 기준: 헤더 80px + 네비 60px + 탭바 60px = 200px, 남은 높이 644px */}
-      {/* 4개 카드 + 3개 간격(6px) = 4*h + 18px = 644px → h = 156.5px */}
+      {/* 4개 카드 + 3개 간격(2px) = 4*h + 6px = 644px → h = 159.5px */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden px-6">
-        <div className="flex flex-col gap-[6px] flex-1 justify-center min-h-0">
+        <div className="flex flex-col gap-[2px] flex-1 justify-center min-h-0">
           {clipsLoading ? (
             Array.from({ length: 4 }).map((_, i) => (
               <div
                 key={i}
-                className="w-full animate-pulse flex-shrink-0 h-[156px]"
+                className="w-full animate-pulse flex-shrink-0 h-[159px]"
                 style={{ borderRadius: 22, background: "#151515" }}
               />
             ))
@@ -373,7 +373,7 @@ export default function RoomView() {
               {myMember && (() => {
                 const clip = getClipForUser(myMember.userId);
                 return clip ? (
-                  <div key={`me-${myMember.userId}`} className="h-[156px] flex-shrink-0">
+                  <div key={`me-${myMember.userId}`} className="h-[159px] flex-shrink-0">
                     <VideoCard
                       userName={myMember.userName || "나"}
                       storageUrl={clip.storageUrl}
@@ -382,7 +382,7 @@ export default function RoomView() {
                     />
                   </div>
                 ) : (
-                  <div key={`me-empty-${myMember.userId}`} className="h-[156px] flex-shrink-0">
+                  <div key={`me-empty-${myMember.userId}`} className="h-[159px] flex-shrink-0">
                     <EmptyMemberCard
                       userName={myMember.userName || "나"}
                       isMe={true}
@@ -396,7 +396,7 @@ export default function RoomView() {
               {otherMembers.map(member => {
                 const clip = getClipForUser(member.userId);
                 return clip ? (
-                  <div key={`friend-${member.userId}`} className="h-[156px] flex-shrink-0">
+                  <div key={`friend-${member.userId}`} className="h-[159px] flex-shrink-0">
                     <VideoCard
                       userName={member.userName || "친구"}
                       storageUrl={clip.storageUrl}
@@ -405,7 +405,7 @@ export default function RoomView() {
                     />
                   </div>
                 ) : (
-                  <div key={`friend-empty-${member.userId}`} className="h-[156px] flex-shrink-0">
+                  <div key={`friend-empty-${member.userId}`} className="h-[159px] flex-shrink-0">
                     <EmptyMemberCard
                       userName={member.userName || "친구"}
                       isMe={false}
@@ -416,7 +416,7 @@ export default function RoomView() {
 
               {/* Invite cards */}
               {Array.from({ length: emptySlots }).map((_, i) => (
-                <div key={`invite-${i}`} className="h-[156px] flex-shrink-0">
+                <div key={`invite-${i}`} className="h-[159px] flex-shrink-0">
                   <InviteCard inviteCode={room.inviteCode} />
                 </div>
               ))}
