@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { RotateCcw, X, Camera } from "lucide-react";
+import { RotateCcw, X, Camera, Plus, Hash } from "lucide-react";
 import { toast } from "sonner";
 import { getCurrentSlot } from "@/lib/timeSlot";
 
@@ -28,8 +28,15 @@ export default function CameraView() {
   const chunksRef = useRef<Blob[]>([]);
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const { data: rooms } = trpc.room.list.useQuery(undefined, { enabled: isAuthenticated });
+  const { data: rooms, isLoading: roomsLoading } = trpc.room.list.useQuery(undefined, { enabled: isAuthenticated });
   const utils = trpc.useUtils();
+
+  // Auto-select first room if no roomId from params
+  useEffect(() => {
+    if (!roomId && !roomsLoading && rooms && rooms.length > 0 && !selectedRoomId) {
+      setSelectedRoomId(rooms[0].id);
+    }
+  }, [rooms, roomsLoading, roomId, selectedRoomId]);
 
   const uploadMutation = trpc.clip.upload.useMutation({
     onSuccess: () => {
@@ -91,7 +98,7 @@ export default function CameraView() {
 
   // Start recording
   const startRecording = useCallback(() => {
-    if (!streamRef.current || state !== "ready") return;
+    if (!streamRef.current || state !== "ready" || !selectedRoomId) return;
     chunksRef.current = [];
 
     // Determine supported MIME type
@@ -132,7 +139,7 @@ export default function CameraView() {
         recorder.stop();
       }
     }, 16);
-  }, [state]);
+  }, [state, selectedRoomId]);
 
   const handleUpload = useCallback(async (blob: Blob, mimeType: string) => {
     if (!selectedRoomId) {
@@ -163,7 +170,7 @@ export default function CameraView() {
     else navigate("/");
   }, [navigate, selectedRoomId]);
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Render: Permission Denied ─────────────────────────────────────────────
 
   if (state === "permission_denied") {
     return (
@@ -188,6 +195,45 @@ export default function CameraView() {
       </div>
     );
   }
+
+  // ── Render: No Rooms ──────────────────────────────────────────────────────
+
+  if (!roomsLoading && (!rooms || rooms.length === 0)) {
+    return (
+      <div className="flex flex-col h-full bg-black items-center justify-center px-6 gap-6">
+        <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: "#151515" }}>
+          <Camera size={28} className="text-[#555]" />
+        </div>
+        <div className="text-center">
+          <p className="text-white font-semibold text-base mb-2">참여한 로그방이 없어요</p>
+          <p className="text-[#555] text-sm leading-relaxed">
+            먼저 로그방을 만들거나<br />초대 코드로 참여해 주세요.
+          </p>
+        </div>
+        <div className="flex gap-3 w-full">
+          <button
+            onClick={() => navigate("/create-room")}
+            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-[16px] font-semibold text-sm text-black transition-all active:scale-95"
+            style={{ background: "#11E6D4" }}
+          >
+            <Plus size={16} />
+            만들기
+          </button>
+          <button
+            onClick={() => navigate("/join-room")}
+            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-[16px] font-semibold text-sm text-white border border-[#2a2a2a] transition-all active:scale-95"
+            style={{ background: "#151515" }}
+          >
+            <Hash size={16} />
+            참여
+          </button>
+        </div>
+        <button onClick={handleClose} className="text-[#555] text-sm">돌아가기</button>
+      </div>
+    );
+  }
+
+  // ── Render: Ready to shoot ────────────────────────────────────────────────
 
   return (
     <div className="flex flex-col h-full bg-black relative">
@@ -231,8 +277,12 @@ export default function CameraView() {
           <X size={18} className="text-white" />
         </button>
 
-        {/* Room selector (if no roomId from params) */}
-        {!roomId && rooms && rooms.length > 0 && (
+        {/* Room selector */}
+        {roomsLoading ? (
+          <div className="px-3 py-2 rounded-full text-xs font-medium text-[#555]" style={{ background: "rgba(0,0,0,0.5)" }}>
+            로드 중...
+          </div>
+        ) : rooms && rooms.length > 0 ? (
           <select
             value={selectedRoomId ?? ""}
             onChange={e => setSelectedRoomId(Number(e.target.value))}
@@ -244,7 +294,7 @@ export default function CameraView() {
               <option key={r.id} value={r.id}>{r.name}</option>
             ))}
           </select>
-        )}
+        ) : null}
 
         {/* Switch camera */}
         <button
@@ -274,10 +324,10 @@ export default function CameraView() {
 
       {/* Bottom controls */}
       <div className="absolute bottom-0 left-0 right-0 z-10 flex flex-col items-center pb-12 gap-4">
-        {/* Shutter button */}
+        {/* Shutter button - disabled if no room selected or still loading */}
         <button
           onClick={startRecording}
-          disabled={state !== "ready"}
+          disabled={state !== "ready" || !selectedRoomId || roomsLoading}
           className="relative flex items-center justify-center transition-all disabled:opacity-40"
           style={{ width: 80, height: 80 }}
         >
@@ -299,7 +349,9 @@ export default function CameraView() {
         </button>
 
         <p className="text-white/60 text-xs">
-          {state === "idle" ? "카메라 시작 중..." :
+          {roomsLoading ? "로그방 로드 중..." :
+           !selectedRoomId ? "로그방을 선택해 주세요" :
+           state === "idle" ? "카메라 시작 중..." :
            state === "ready" ? "버튼을 눌러 2초 촬영" :
            state === "recording" ? "촬영 중..." :
            state === "uploading" ? "업로드 중..." :
