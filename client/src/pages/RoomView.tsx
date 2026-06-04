@@ -6,8 +6,11 @@ import { ArrowLeft, UserPlus, Copy, ChevronLeft, ChevronRight, Camera, ChevronDo
 import { toast } from "sonner";
 import { getCurrentSlot, formatHour, formatDate, getTodayDate } from "@/lib/timeSlot";
 
-// PRD: 좌우 여백 24, 카드 간격 6, border-radius 22, 모든 카드 동일 너비·높이
-const CARD_ASPECT = "3/4";
+// PRD: 가로 긴 직사각형 카드 (스크롤 없이 4개 모두 보임)
+// 모바일 390px 기준, 좌우 여백 24px, 카드 간격 6px
+// 4개 카드 + 3개 간격 = 390 - 48 = 342px (카드 너비)
+// 카드 높이를 작게 설정하여 4개가 한 화면에 보이도록
+const CARD_ASPECT = "16/9"; // 가로 긴 직사각형
 
 // ── VideoCard ────────────────────────────────────────────────────────────────
 
@@ -16,26 +19,44 @@ function VideoCard({
 }: { userName: string; storageUrl: string; timeSlot: number; isMe: boolean }) {
   return (
     <div
-      className="relative w-full overflow-hidden flex-shrink-0"
+      className="relative w-full overflow-hidden flex-shrink-0 group"
       style={{ borderRadius: 22, background: "#151515", aspectRatio: CARD_ASPECT }}
     >
+      {/* Video - GIF 효과: 무음, 자동 재생, 무한 반복 */}
       <video
         src={storageUrl}
-        autoPlay loop muted playsInline
+        autoPlay
+        loop
+        muted
+        playsInline
         className="absolute inset-0 w-full h-full object-cover"
       />
-      <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, transparent 40%, rgba(0,0,0,0.75) 100%)" }} />
+      
+      {/* 어두운 오버레이 (시간 텍스트 가독성) */}
+      <div
+        className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/30"
+      />
+      
+      {/* 중앙 시간 표시 */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <span className="text-white font-bold" style={{ fontSize: 28, textShadow: "0 2px 12px rgba(0,0,0,0.9)" }}>
+        <span
+          className="text-white font-bold drop-shadow-lg"
+          style={{ fontSize: 24, textShadow: "0 2px 16px rgba(0,0,0,0.8)" }}
+        >
           {formatHour(timeSlot)}
         </span>
       </div>
-      <div className="absolute bottom-0 left-0 right-0 px-4 pb-3 flex items-center gap-1.5">
-        <span className="text-white text-sm font-semibold" style={{ textShadow: "0 1px 4px rgba(0,0,0,0.8)" }}>
+      
+      {/* 우측 하단 사용자명 + 나 배지 */}
+      <div className="absolute bottom-0 right-0 left-0 px-3 py-2 flex items-center justify-between bg-gradient-to-t from-black/60 to-transparent">
+        <span className="text-white text-xs font-semibold truncate" style={{ textShadow: "0 1px 4px rgba(0,0,0,0.8)" }}>
           {userName}
         </span>
         {isMe && (
-          <span className="text-xs font-medium px-1.5 py-0.5 rounded-full" style={{ background: "rgba(17,230,212,0.2)", color: "#11E6D4" }}>
+          <span
+            className="text-xs font-medium px-1.5 py-0.5 rounded-full flex-shrink-0 ml-2"
+            style={{ background: "rgba(17,230,212,0.2)", color: "#11E6D4" }}
+          >
             나
           </span>
         )}
@@ -51,28 +72,28 @@ function EmptyMemberCard({
 }: { userName: string; isMe: boolean; onShoot?: () => void }) {
   return (
     <div
-      className="relative w-full flex flex-col items-center justify-center gap-3 flex-shrink-0"
+      className="relative w-full flex flex-col items-center justify-center gap-2 flex-shrink-0"
       style={{ borderRadius: 22, background: "#151515", aspectRatio: CARD_ASPECT }}
     >
       <div
-        className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold"
+        className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
         style={{ background: "#1e1e1e", color: isMe ? "#11E6D4" : "#444" }}
       >
         {userName.charAt(0).toUpperCase()}
       </div>
-      <div className="flex flex-col items-center gap-2">
-        <span className="text-white text-sm font-medium">{userName}</span>
+      <div className="flex flex-col items-center gap-1 text-center px-2">
+        <span className="text-white text-xs font-medium truncate w-full">{userName}</span>
         {isMe ? (
           <button
             onClick={onShoot}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold text-black transition-all active:scale-95"
+            className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold text-black transition-all active:scale-95 whitespace-nowrap"
             style={{ background: "#11E6D4" }}
           >
-            <Camera size={12} />
-            지금 찍기
+            <Camera size={10} />
+            찍기
           </button>
         ) : (
-          <span className="text-[#444] text-xs">아직 로그 없음</span>
+          <span className="text-[#444] text-xs">로그 없음</span>
         )}
       </div>
     </div>
@@ -84,20 +105,25 @@ function EmptyMemberCard({
 function InviteCard({ inviteCode }: { inviteCode: string }) {
   return (
     <div
-      className="relative w-full flex flex-col items-center justify-center gap-3 flex-shrink-0 cursor-pointer transition-all active:scale-[0.98]"
-      style={{ borderRadius: 22, background: "#0d0d0d", aspectRatio: CARD_ASPECT, border: "1.5px dashed #2a2a2a" }}
+      className="relative w-full flex flex-col items-center justify-center gap-2 flex-shrink-0 cursor-pointer transition-all active:scale-[0.98]"
+      style={{
+        borderRadius: 22,
+        background: "#0d0d0d",
+        aspectRatio: CARD_ASPECT,
+        border: "1.5px dashed #2a2a2a",
+      }}
       onClick={() => {
         navigator.clipboard.writeText(inviteCode).then(() => toast.success("초대 코드가 복사됐어요!"));
       }}
     >
       <div
-        className="w-12 h-12 rounded-full flex items-center justify-center"
+        className="w-8 h-8 rounded-full flex items-center justify-center"
         style={{ background: "rgba(17,230,212,0.06)", border: "1.5px dashed rgba(17,230,212,0.4)" }}
       >
-        <UserPlus size={20} style={{ color: "#11E6D4" }} />
+        <UserPlus size={14} style={{ color: "#11E6D4" }} />
       </div>
-      <div className="flex flex-col items-center gap-1">
-        <span className="text-sm font-semibold" style={{ color: "#11E6D4" }}>+ 친구 초대</span>
+      <div className="flex flex-col items-center gap-0.5 text-center px-2">
+        <span className="text-xs font-semibold" style={{ color: "#11E6D4" }}>+ 초대</span>
         <span className="text-xs" style={{ color: "#333" }}>{inviteCode}</span>
       </div>
     </div>
@@ -121,7 +147,6 @@ function SlotPicker({
   selectedHour: number;
   onSelect: (date: string, hour: number) => void;
 }) {
-  // Group slots by date
   const grouped = useMemo(() => {
     const map = new Map<string, number[]>();
     for (const s of slotList) {
@@ -144,7 +169,6 @@ function SlotPicker({
         style={{ background: "#111" }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Handle */}
         <div className="flex justify-center pt-3 pb-4">
           <div className="w-10 h-1 rounded-full" style={{ background: "#333" }} />
         </div>
@@ -207,7 +231,6 @@ export default function RoomView() {
     { enabled: !!roomId && !isNaN(roomId) }
   );
 
-  // Build ordered slot list
   const slotList = useMemo(() => {
     const today = getTodayDate();
     const slots = new Map<string, Set<number>>();
@@ -317,7 +340,6 @@ export default function RoomView() {
           <ChevronLeft size={16} className="text-white" />
         </button>
 
-        {/* Tappable slot label — opens picker */}
         <button
           onClick={() => setPickerOpen(true)}
           className="flex flex-col items-center gap-0.5 transition-all active:scale-95"
@@ -339,9 +361,9 @@ export default function RoomView() {
         </button>
       </div>
 
-      {/* Cards */}
-      <div className="flex-1 scroll-area">
-        <div className="px-6 py-4 flex flex-col gap-[6px]">
+      {/* Cards - 스크롤 없이 4개 모두 보이도록 */}
+      <div className="flex-1 flex flex-col">
+        <div className="px-6 py-3 flex flex-col gap-[6px] flex-1 justify-center">
           {clipsLoading ? (
             Array.from({ length: 4 }).map((_, i) => (
               <div
@@ -352,7 +374,7 @@ export default function RoomView() {
             ))
           ) : (
             <>
-              {/* My card — always first */}
+              {/* My card */}
               {myMember && (() => {
                 const clip = getClipForUser(myMember.userId);
                 return clip ? (
@@ -373,7 +395,7 @@ export default function RoomView() {
                 );
               })()}
 
-              {/* Friend cards — fixed order, no reordering */}
+              {/* Friend cards */}
               {otherMembers.map(member => {
                 const clip = getClipForUser(member.userId);
                 return clip ? (
@@ -393,7 +415,7 @@ export default function RoomView() {
                 );
               })}
 
-              {/* Invite cards — always last */}
+              {/* Invite cards */}
               {Array.from({ length: emptySlots }).map((_, i) => (
                 <InviteCard key={`invite-${i}`} inviteCode={room.inviteCode} />
               ))}
