@@ -8,8 +8,6 @@ import { getCurrentSlot, formatHour, formatDate, getTodayDate } from "@/lib/time
 
 // PRD: 가로 긴 직사각형 카드 (스크롤 없이 4개 모두 보임)
 // 모바일 390px 기준, 좌우 여백 24px, 카드 간격 6px
-// 4개 카드 + 3개 간격 = 390 - 48 = 342px (카드 너비)
-// 카드 높이를 작게 설정하여 4개가 한 화면에 보이도록
 const CARD_ASPECT = "16/9"; // 가로 긴 직사각형
 
 // ── VideoCard ────────────────────────────────────────────────────────────────
@@ -361,9 +359,9 @@ export default function RoomView() {
         </button>
       </div>
 
-      {/* Cards - 스크롤 없이 4개 모두 보이도록 */}
-      <div className="flex-1 flex flex-col">
-        <div className="px-6 py-3 flex flex-col gap-[6px] flex-1 justify-center">
+      {/* Cards container - 상하단 패딩 제거, 카드 영역만 차지 */}
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <div className="px-6 py-2 flex flex-col gap-[6px] flex-1 justify-center min-h-0">
           {clipsLoading ? (
             Array.from({ length: 4 }).map((_, i) => (
               <div
