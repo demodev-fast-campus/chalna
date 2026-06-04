@@ -6,10 +6,6 @@ import { ArrowLeft, UserPlus, Copy, ChevronLeft, ChevronRight, Camera, ChevronDo
 import { toast } from "sonner";
 import { getCurrentSlot, formatHour, formatDate, getTodayDate } from "@/lib/timeSlot";
 
-// PRD: 가로 긴 직사각형 카드 (스크롤 없이 4개 모두 보임)
-// 모바일 390px 기준, 좌우 여백 24px, 카드 간격 6px
-const CARD_ASPECT = "16/9"; // 가로 긴 직사각형
-
 // ── VideoCard ────────────────────────────────────────────────────────────────
 
 function VideoCard({
@@ -18,7 +14,7 @@ function VideoCard({
   return (
     <div
       className="relative w-full overflow-hidden flex-shrink-0 group"
-      style={{ borderRadius: 22, background: "#151515", aspectRatio: CARD_ASPECT }}
+      style={{ borderRadius: 22, background: "#151515" }}
     >
       {/* Video - GIF 효과: 무음, 자동 재생, 무한 반복 */}
       <video
@@ -71,7 +67,7 @@ function EmptyMemberCard({
   return (
     <div
       className="relative w-full flex flex-col items-center justify-center gap-2 flex-shrink-0"
-      style={{ borderRadius: 22, background: "#151515", aspectRatio: CARD_ASPECT }}
+      style={{ borderRadius: 22, background: "#151515" }}
     >
       <div
         className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
@@ -107,7 +103,6 @@ function InviteCard({ inviteCode }: { inviteCode: string }) {
       style={{
         borderRadius: 22,
         background: "#0d0d0d",
-        aspectRatio: CARD_ASPECT,
         border: "1.5px dashed #2a2a2a",
       }}
       onClick={() => {
@@ -295,9 +290,9 @@ export default function RoomView() {
   const getClipForUser = (userId: number) => clips?.find(c => c.userId === userId);
 
   return (
-    <div className="flex flex-col h-full bg-black">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 pt-14 pb-3 flex-shrink-0">
+    <div className="flex flex-col h-screen w-full bg-black overflow-hidden">
+      {/* Header - 고정 높이 */}
+      <div className="flex items-center justify-between px-6 pt-14 pb-3 flex-shrink-0 h-[80px]">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate("/")}
@@ -324,9 +319,9 @@ export default function RoomView() {
         </button>
       </div>
 
-      {/* Time slot navigator */}
+      {/* Time slot navigator - 고정 높이 */}
       <div
-        className="flex items-center justify-between px-6 py-3 flex-shrink-0"
+        className="flex items-center justify-between px-6 py-3 flex-shrink-0 h-[60px]"
         style={{ borderBottom: "1px solid #111" }}
       >
         <button
@@ -359,15 +354,17 @@ export default function RoomView() {
         </button>
       </div>
 
-      {/* Cards container - 상하단 패딩 제거, 카드 영역만 차지 */}
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        <div className="px-6 py-2 flex flex-col gap-[6px] flex-1 justify-center min-h-0">
+      {/* Cards container - 정확한 높이 계산 */}
+      {/* 390×844 기준: 헤더 80px + 네비 60px + 탭바 60px = 200px, 남은 높이 644px */}
+      {/* 4개 카드 + 3개 간격(6px) = 4*h + 18px = 644px → h = 156.5px */}
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden px-6">
+        <div className="flex flex-col gap-[6px] flex-1 justify-center min-h-0">
           {clipsLoading ? (
             Array.from({ length: 4 }).map((_, i) => (
               <div
                 key={i}
-                className="w-full animate-pulse flex-shrink-0"
-                style={{ borderRadius: 22, background: "#151515", aspectRatio: CARD_ASPECT }}
+                className="w-full animate-pulse flex-shrink-0 h-[156px]"
+                style={{ borderRadius: 22, background: "#151515" }}
               />
             ))
           ) : (
@@ -376,20 +373,22 @@ export default function RoomView() {
               {myMember && (() => {
                 const clip = getClipForUser(myMember.userId);
                 return clip ? (
-                  <VideoCard
-                    key={`me-${myMember.userId}`}
-                    userName={myMember.userName || "나"}
-                    storageUrl={clip.storageUrl}
-                    timeSlot={selectedHour}
-                    isMe={true}
-                  />
+                  <div key={`me-${myMember.userId}`} className="h-[156px] flex-shrink-0">
+                    <VideoCard
+                      userName={myMember.userName || "나"}
+                      storageUrl={clip.storageUrl}
+                      timeSlot={selectedHour}
+                      isMe={true}
+                    />
+                  </div>
                 ) : (
-                  <EmptyMemberCard
-                    key={`me-empty-${myMember.userId}`}
-                    userName={myMember.userName || "나"}
-                    isMe={true}
-                    onShoot={handleShoot}
-                  />
+                  <div key={`me-empty-${myMember.userId}`} className="h-[156px] flex-shrink-0">
+                    <EmptyMemberCard
+                      userName={myMember.userName || "나"}
+                      isMe={true}
+                      onShoot={handleShoot}
+                    />
+                  </div>
                 );
               })()}
 
@@ -397,25 +396,29 @@ export default function RoomView() {
               {otherMembers.map(member => {
                 const clip = getClipForUser(member.userId);
                 return clip ? (
-                  <VideoCard
-                    key={`friend-${member.userId}`}
-                    userName={member.userName || "친구"}
-                    storageUrl={clip.storageUrl}
-                    timeSlot={selectedHour}
-                    isMe={false}
-                  />
+                  <div key={`friend-${member.userId}`} className="h-[156px] flex-shrink-0">
+                    <VideoCard
+                      userName={member.userName || "친구"}
+                      storageUrl={clip.storageUrl}
+                      timeSlot={selectedHour}
+                      isMe={false}
+                    />
+                  </div>
                 ) : (
-                  <EmptyMemberCard
-                    key={`friend-empty-${member.userId}`}
-                    userName={member.userName || "친구"}
-                    isMe={false}
-                  />
+                  <div key={`friend-empty-${member.userId}`} className="h-[156px] flex-shrink-0">
+                    <EmptyMemberCard
+                      userName={member.userName || "친구"}
+                      isMe={false}
+                    />
+                  </div>
                 );
               })}
 
               {/* Invite cards */}
               {Array.from({ length: emptySlots }).map((_, i) => (
-                <InviteCard key={`invite-${i}`} inviteCode={room.inviteCode} />
+                <div key={`invite-${i}`} className="h-[156px] flex-shrink-0">
+                  <InviteCard inviteCode={room.inviteCode} />
+                </div>
               ))}
             </>
           )}
