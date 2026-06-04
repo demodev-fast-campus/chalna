@@ -108,6 +108,22 @@ The envs above are system envs, when use env in website code, refer `server/_cor
 
 ---
 
+## Permanent Deployment
+
+This project is a full-stack app, so permanent hosting requires a Node.js runtime, a MySQL-compatible database, and video storage credentials. Deployment-ready files have been added for container-based hosting.
+
+| File | Purpose |
+|---|---|
+| `Dockerfile` | Builds and runs the production Node.js server. |
+| `.dockerignore` | Excludes local dependencies, build outputs, logs, and secrets from Docker builds. |
+| `render.yaml` | Provides a Render Blueprint example for permanent web service deployment. |
+| `.env.example` | Lists required production environment variables. |
+| `DEPLOYMENT.md` | Explains the complete permanent deployment flow. |
+
+For the complete deployment checklist, see [`DEPLOYMENT.md`](./DEPLOYMENT.md).
+
+---
+
 ## Frontend Workflow
 
 1. Choose a design style before you write any frontend code according to Design Guide (color, font, shadow, art style). Remember to edit `client/src/index.css` for global theming and add needed font using google font cdn in `client/index.html`.

@@ -6,9 +6,23 @@ import { RotateCcw, X, Camera, Plus, Hash } from "lucide-react";
 import { toast } from "sonner";
 import { getCurrentSlot } from "@/lib/timeSlot";
 
-type CameraState = "idle" | "permission_denied" | "ready" | "recording" | "uploading" | "done";
+type CameraState = "idle" | "permission_denied" | "unsupported" | "ready" | "recording" | "uploading" | "done";
 
 const RECORD_DURATION_MS = 2000;
+const MAX_UPLOAD_BYTES = 45 * 1024 * 1024;
+
+const getSupportedVideoMimeType = () => {
+  if (typeof MediaRecorder === "undefined") return null;
+
+  const candidates = [
+    "video/webm;codecs=vp9",
+    "video/webm;codecs=vp8",
+    "video/webm",
+    "video/mp4",
+  ];
+
+  return candidates.find(type => MediaRecorder.isTypeSupported(type)) ?? "";
+};
 
 export default function CameraView() {
   const params = useParams<{ roomId?: string }>();
@@ -60,14 +74,32 @@ export default function CameraView() {
     if (state !== "idle") return;
 
     const requestCamera = async () => {
+      if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+        setState("unsupported");
+        return;
+      }
+
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode },
+        const constraints: MediaStreamConstraints = {
+          video: {
+            facingMode: { ideal: facingMode },
+            width: { ideal: 720 },
+            height: { ideal: 1280 },
+          },
           audio: false,
-        });
+        };
+
+        let stream: MediaStream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        }
+
         streamRef.current = stream;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
+          await videoRef.current.play().catch(() => undefined);
         }
         setState("ready");
       } catch (err) {
@@ -102,14 +134,12 @@ export default function CameraView() {
     if (!streamRef.current || state !== "ready" || !selectedRoomId) return;
     chunksRef.current = [];
 
-    // Determine supported MIME type
-    const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
-      ? "video/webm;codecs=vp9"
-      : MediaRecorder.isTypeSupported("video/webm")
-      ? "video/webm"
-      : MediaRecorder.isTypeSupported("video/mp4")
-      ? "video/mp4"
-      : "";
+    const mimeType = getSupportedVideoMimeType();
+    if (mimeType === null) {
+      setState("unsupported");
+      toast.error("이 브라우저에서는 영상 촬영을 지원하지 않아요.");
+      return;
+    }
 
     const recorder = new MediaRecorder(streamRef.current, mimeType ? { mimeType } : undefined);
     recorderRef.current = recorder;
@@ -120,6 +150,11 @@ export default function CameraView() {
 
     recorder.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: mimeType || "video/webm" });
+      if (blob.size === 0) {
+        setState("ready");
+        toast.error("촬영된 영상 데이터가 비어 있어요. 다시 시도해 주세요.");
+        return;
+      }
       const url = URL.createObjectURL(blob);
       setPreviewUrl(url);
       handleUpload(blob, mimeType || "video/webm");
@@ -151,6 +186,12 @@ export default function CameraView() {
     setState("uploading");
     const slot = getCurrentSlot();
 
+    if (blob.size > MAX_UPLOAD_BYTES) {
+      toast.error("영상 파일이 너무 커요. 다시 촬영해 주세요.");
+      setState("ready");
+      return;
+    }
+
     // Convert blob to Uint8Array for transmission
     const arrayBuffer = await blob.arrayBuffer();
     const uint8Array = new Uint8Array(arrayBuffer);
@@ -180,6 +221,29 @@ export default function CameraView() {
         <div className="text-center">
           <h2 className="text-white font-bold text-lg mb-2">카메라 권한이 필요해요</h2>
           <p className="text-[#555] text-sm">브라우저 설정에서 카메라 권한을 허용해 주세요.</p>
+        </div>
+        <button
+          onClick={() => navigate("/")}
+          className="px-6 py-2 rounded-full font-semibold text-black transition-all active:scale-95"
+          style={{ background: "#11E6D4" }}
+        >
+          돌아가기
+        </button>
+      </div>
+    );
+  }
+
+  if (state === "unsupported") {
+    return (
+      <div className="flex flex-col h-full bg-black items-center justify-center px-6 gap-6">
+        <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: "#151515" }}>
+          <Camera size={28} className="text-[#555]" />
+        </div>
+        <div className="text-center">
+          <h2 className="text-white font-bold text-lg mb-2">지원하지 않는 브라우저예요</h2>
+          <p className="text-[#555] text-sm leading-5">
+            모바일 Chrome, Safari 최신 버전에서 다시 시도해 주세요.
+          </p>
         </div>
         <button
           onClick={() => navigate("/")}

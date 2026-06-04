@@ -1,12 +1,14 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
-import { getLoginUrl } from "@/const";
+import { getLoginUrl, isLoginConfigured } from "@/const";
 import { useLocation } from "wouter";
 import { Plus, Hash, ChevronRight, Users, LogIn } from "lucide-react";
 
 export default function Home() {
   const { user, loading, isAuthenticated } = useAuth();
   const [, navigate] = useLocation();
+  const loginConfigured = isLoginConfigured();
+  const loginUrl = getLoginUrl();
 
   const { data: rooms, isLoading: roomsLoading } = trpc.room.list.useQuery(undefined, {
     enabled: isAuthenticated,
@@ -31,13 +33,24 @@ export default function Home() {
 
         {/* Login button */}
         <a
-          href={getLoginUrl()}
-          className="flex items-center justify-center gap-2 w-full py-4 rounded-[22px] font-semibold text-base text-black"
-          style={{ background: "#11E6D4" }}
+          href={loginUrl}
+          onClick={(event) => {
+            if (!loginConfigured) event.preventDefault();
+          }}
+          aria-disabled={!loginConfigured}
+          className="flex items-center justify-center gap-2 w-full py-4 rounded-[22px] font-semibold text-base text-black disabled:opacity-50"
+          style={{ background: loginConfigured ? "#11E6D4" : "#555" }}
         >
           <LogIn size={18} />
           시작하기
         </a>
+
+        {!loginConfigured && (
+          <p className="text-center text-xs leading-5 text-[#777]">
+            로컬 개발 환경에 OAuth 설정이 없어 로그인은 비활성화되어 있어요.
+            배포 환경 또는 Manus 웹앱 환경에서는 정상적으로 로그인할 수 있습니다.
+          </p>
+        )}
       </div>
     );
   }
