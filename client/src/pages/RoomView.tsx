@@ -13,7 +13,7 @@ function VideoCard({
 }: { userName: string; storageUrl: string; timeSlot: number; isMe: boolean }) {
   return (
     <div
-      className="relative w-full overflow-hidden flex-shrink-0 group"
+      className="relative w-full h-full overflow-hidden flex-shrink-0 group"
       style={{ borderRadius: 22, background: "#151515" }}
     >
       {/* Video - GIF 효과: 무음, 자동 재생, 무한 반복 */}
