@@ -179,6 +179,14 @@ export default function CameraView() {
       return;
     }
 
+    // 영상 크기 검증 (최소 100KB 이상)
+    if (blob.size < 100 * 1024) {
+      console.error(`[Upload] Blob size too small: ${blob.size} bytes`);
+      toast.error("영상이 너무 작습니다. 다시 촬영해주세요.");
+      setRecordingState("idle");
+      return;
+    }
+
     setRecordingState("uploading");
     const slot = getCurrentSlot();
 
