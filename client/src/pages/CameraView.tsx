@@ -1,4 +1,6 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+"use client";
+
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -16,12 +18,12 @@ export default function CameraView() {
   const [, navigate] = useLocation();
   const { isAuthenticated, user } = useAuth();
 
-  // 카메라 상태 (독립적)
+  // 카메라 상태
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState(false);
-  const [facingMode, setFacingMode] = useState<"user" | "environment">("environment");
+  const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
 
-  // 녹화 상태 (독립적)
+  // 녹화 상태
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
   const [progress, setProgress] = useState(0);
 
@@ -33,6 +35,7 @@ export default function CameraView() {
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const recordingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const { data: rooms, isLoading: roomsLoading } = trpc.room.list.useQuery(undefined, { enabled: isAuthenticated });
@@ -46,7 +49,7 @@ export default function CameraView() {
   }, [rooms, roomsLoading, roomId, selectedRoomId]);
 
   // ─────────────────────────────────────────────────────────────────────────
-  // 카메라 초기화: 화면 진입 시 딱 한 번만 실행
+  // 카메라 초기화: 화면 진입 시 한 번만 실행
   // ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -98,7 +101,7 @@ export default function CameraView() {
       }
       setCameraReady(false);
     };
-  }, [isAuthenticated, facingMode]); // facingMode 변경 시만 재초기화
+  }, [isAuthenticated, facingMode]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // 전면/후면 전환
@@ -106,7 +109,6 @@ export default function CameraView() {
   const toggleFacingMode = useCallback(() => {
     console.log("[Camera] Toggling facing mode");
     setFacingMode(prev => prev === "user" ? "environment" : "user");
-    // facingMode 변경 → useEffect 트리거 → 카메라 재초기화
   }, []);
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -120,6 +122,8 @@ export default function CameraView() {
 
     console.log("[Recording] Starting 2-second recording");
     chunksRef.current = [];
+    setRecordingState("recording");
+    setProgress(0);
 
     // MIME 타입 결정
     const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
@@ -130,18 +134,29 @@ export default function CameraView() {
       ? "video/mp4"
       : "";
 
+    console.log("[Recording] Using MIME type:", mimeType);
+
     const recorder = new MediaRecorder(streamRef.current, mimeType ? { mimeType } : undefined);
     recorderRef.current = recorder;
 
     recorder.ondataavailable = (e) => {
       console.log("[Recording] Data chunk:", e.data.size, "bytes");
-      if (e.data.size > 0) chunksRef.current.push(e.data);
+      if (e.data.size > 0) {
+        chunksRef.current.push(e.data);
+      }
     };
 
     recorder.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: mimeType || "video/webm" });
       console.log("[Recording] Stopped. Total blob size:", blob.size, "bytes");
-      handleUpload(blob, mimeType || "video/webm");
+      
+      if (blob.size > 0) {
+        handleUpload(blob, mimeType || "video/webm");
+      } else {
+        console.error("[Recording] Blob is empty!");
+        toast.error("영상 녹화 실패. 다시 시도해주세요.");
+        setRecordingState("idle");
+      }
     };
 
     recorder.onerror = (e) => {
@@ -151,22 +166,23 @@ export default function CameraView() {
     };
 
     recorder.start();
-    setRecordingState("recording");
-    setProgress(0);
 
-    // 2초 타이머
+    // 진행도 표시
     const startTime = Date.now();
     progressIntervalRef.current = setInterval(() => {
       const elapsed = Date.now() - startTime;
       const pct = Math.min((elapsed / RECORD_DURATION_MS) * 100, 100);
       setProgress(pct);
-
-      if (elapsed >= RECORD_DURATION_MS) {
-        clearInterval(progressIntervalRef.current!);
-        console.log("[Recording] 2 seconds elapsed, stopping");
-        recorder.stop();
-      }
     }, 16);
+
+    // 2초 후 자동 정지
+    recordingTimeoutRef.current = setTimeout(() => {
+      console.log("[Recording] 2 seconds elapsed, stopping recorder");
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+      recorder.stop();
+    }, RECORD_DURATION_MS);
   }, [cameraReady, selectedRoomId]);
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -227,6 +243,17 @@ export default function CameraView() {
   }, [selectedRoomId, user, utils, navigate]);
 
   const handleClose = useCallback(() => {
+    // 녹화 중이면 정지
+    if (recordingTimeoutRef.current) {
+      clearTimeout(recordingTimeoutRef.current);
+    }
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+    }
+    if (recorderRef.current && recorderRef.current.state === "recording") {
+      recorderRef.current.stop();
+    }
+
     if (selectedRoomId) navigate(`/room/${selectedRoomId}`);
     else navigate("/");
   }, [navigate, selectedRoomId]);
@@ -352,14 +379,14 @@ export default function CameraView() {
           <Camera size={24} className="text-black" />
         </button>
 
-        {/* Toggle Facing Mode */}
+        {/* Camera Toggle */}
         <button
           onClick={toggleFacingMode}
           disabled={isRecording || isUploading}
-          className="w-9 h-9 flex items-center justify-center rounded-full transition-all active:scale-95 disabled:opacity-30"
+          className="w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-95 disabled:opacity-30"
           style={{ background: "#151515" }}
         >
-          <RotateCcw size={16} className="text-white" />
+          <RotateCcw size={16} className="text-[#11E6D4]" />
         </button>
       </div>
     </div>
