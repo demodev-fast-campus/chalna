@@ -6,6 +6,7 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
+import uploadClipRouter from "../uploadClip";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 
@@ -32,6 +33,8 @@ async function startServer() {
   const app = express();
   const server = createServer(app);
   // Configure body parser with larger size limit for file uploads
+  // Raw body parser for video upload
+  app.use("/api/uploadClip", express.raw({ type: "video/*", limit: "100mb" }));
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
@@ -41,6 +44,7 @@ async function startServer() {
 
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+  app.use("/api", uploadClipRouter);
   // tRPC API
   app.use(
     "/api/trpc",
