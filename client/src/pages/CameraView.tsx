@@ -125,13 +125,14 @@ export default function CameraView() {
     setRecordingState("recording");
     setProgress(0);
 
-    // MIME 타입 결정
-    const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
-      ? "video/webm;codecs=vp9"
+    // MIME 타입 결정 (모바일 호환성 우선: MP4 > WebM > VP9)
+    // VP9는 Safari/iOS에서 지원 안 함
+    const mimeType = MediaRecorder.isTypeSupported("video/mp4")
+      ? "video/mp4"
       : MediaRecorder.isTypeSupported("video/webm")
       ? "video/webm"
-      : MediaRecorder.isTypeSupported("video/mp4")
-      ? "video/mp4"
+      : MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
+      ? "video/webm;codecs=vp9"
       : "";
 
     console.log("[Recording] Using MIME type:", mimeType);
